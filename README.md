@@ -4,16 +4,18 @@
 
 - [x] 更新 requirements.txt
 - [x] 更新 README
-- [ ] 移动配置至 config.py，与主要逻辑分离
-- [ ] 重写 spaghetti codes
+- [x] 移动配置至 config.py，与主要逻辑分离
+- [ ] 重写 spaghetti codes：太多了，重写了一部分
+- [x] 解决代码复用低的问题
+- [x] 删除文件的问题：只会删除 linux_download_path 下并且所有 tracker 都是北邮人的文件
+- [x] 改为限制总大小而不是文件数
+- [x] 把交互改好看一些
+- [x] 降低请求失败重试次数至3或者2，失败两三次就得了，默认是 5 太烦人了
+- [x] 原作者似乎不会用一行 list 的语法，导致程序变长和可读性降低
+- [x] 清除无用命令，那些可以用网页控制台的命令有必要重写一边吗？而且好多代码竟然不是复用的！
+- [x] 重命名部分函数，原来所有函数都是 get 开头，改成更具有意义的 select、parse 等
 
-本机器人可以利用校园里的服务器进行全自动做种（本人亲测已上传96TB），采用 transmission 作为下载器，可以从 Web 端查看种子下载情况
-
-![image-20200330163255569](https://github.com/lipssmycode/byrbt_bot/blob/master/images/image-20200330163255569.png)
-
-（疫情期间，免费种子较少）
-
-![image-20200330163105285](https://github.com/lipssmycode/byrbt_bot/blob/master/images/image-20200330163105285.png)
+**以下是原来的 README (去掉冗余部分之后)**
 
 - [x] 支持识别验证码登录（感谢 [bumzy/decaptcha](https://github.com/bumzy/decaptcha) 项目）
 - [x] 支持下载种子(感谢 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot) 项目)

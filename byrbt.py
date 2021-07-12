@@ -1,19 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Time    : 2019/11/15 21:23
-# @Author  : smyyan & ghoskno
-# @File    : brybt.py
-# @Software: PyCharm
+# @Time    : 2020 July
+# @Author  : smyyan & ghoskno & WhymustIhaveaname
+# @Software: Sublime Text
 
-import time
-import os
-import re
-import pickle
+import time,os,re,pickle,requests,platform,sys,traceback,math
 from io import BytesIO
-import platform
 from contextlib import ContextDecorator
 from PIL import Image
-import requests
 from requests.cookies import RequestsCookieJar
 from bs4 import BeautifulSoup
 from decaptcha import DeCaptcha
@@ -21,8 +15,28 @@ from config import *
 
 # 判断平台
 osName = platform.system()
-if osName not in ('Windows','Linux'):
+if osName not in ('Linux',):
     raise Exception('not support this system : %s'%(osName,))
+
+LOGLEVEL={0:"DEBUG",1:"INFO",2:"WARN",3:"ERR",4:"FATAL"}
+LOGFILE=sys.argv[0].split(".")
+LOGFILE[-1]="log"
+LOGFILE=".".join(LOGFILE)
+
+def log(msg,l=1,end="\n",logfile=LOGFILE):
+    st=traceback.extract_stack()[-2]
+    lstr=LOGLEVEL[l]
+    #now_str="%s %03d"%(time.strftime("%y/%m/%d %H:%M:%S",time.localtime()),math.modf(time.time())[0]*1000)
+    now_str="%s"%(time.strftime("%y/%m/%d %H:%M:%S",time.localtime()),)
+    perfix="%s [%s,%s:%03d]"%(now_str,lstr,st.name,st.lineno)
+    if l<3:
+        tempstr="%s %s%s"%(perfix,str(msg),end)
+    else:
+        tempstr="%s %s:\n%s%s"%(perfix,str(msg),traceback.format_exc(limit=5),end)
+    print(tempstr,end="")
+    if l>=1:
+        with open(logfile,"a") as f:
+            f.write(tempstr)
 
 # 常量
 _BASE_URL = 'https://bt.byr.cn/'
@@ -56,16 +70,12 @@ if osName == 'Windows':
     download_path = os.path.abspath(windows_download_path)
 elif osName == 'Linux':
     download_path = os.path.abspath(linux_download_path)
-else:
-    raise Exception('not support system! {}'.format(osName))
 
 decaptcha = DeCaptcha()
 decaptcha.load_model(decaptcha_model)
 
-old_torrent = list()
-if os.path.exists(torrent_infos):
-    old_torrent = pickle.load(open(torrent_infos, 'rb'))
-
+existed_torrent = []
+transmission_cmd='transmission-remote -n %s '%(transmission_user_pw)
 
 def get_url(url):
     return _BASE_URL + url
@@ -73,11 +83,10 @@ def get_url(url):
 
 def login():
     url = get_url('login.php')
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
 
     session = requests.session()
-    for i in range(5):
+    for i in range(3):
         login_content = session.get(url)
         login_soup = BeautifulSoup(login_content.text, 'lxml')
 
@@ -93,26 +102,25 @@ def login():
             cookies = {}
             for k, v in session.cookies.items():
                 cookies[k] = v
-
             with open(cookies_save_path, 'wb') as f:
                 pickle.dump(cookies, f)
-            return cookies
-
-        time.sleep(1)
-
-    raise Exception('Cat not get Cookies!')
+            break
+        log("failed the %dth try, retry in 3 seconds"%(i),l=2)
+        time.sleep(3)
+    else:
+        raise Exception('Failed to get Cookies!')
+    return cookies
 
 
 def load_cookie():
     global byrbt_cookies
     if os.path.exists(cookies_save_path):
-        print('find {}, loading cookies'.format(cookies_save_path))
+        log('%s found, loading cookies...'%(cookies_save_path,))
         read_path = open(cookies_save_path, 'rb')
         byrbt_cookies = pickle.load(read_path)
     else:
-        print('not find {}, get cookies...'.format(cookies_save_path))
+        log('%s not find, getting cookies...'%(cookies_save_path,))
         byrbt_cookies = login()
-
     return byrbt_cookies
 
 
@@ -128,11 +136,11 @@ def _get_tag(tag):
         return ''
 
 
-def _get_torrent_info(table):
+def parse_torrent_info(table):
     assert isinstance(table, list)
-    torrent_infos = list()
+    torrent_infos = []
     for item in table:
-        torrent_info = dict()
+        torrent_info = {}
         tds = item.select('td')
         cat = tds[0].select('img')[0].attrs['title']
         main_td = tds[1].select('table > tr > td')[0]
@@ -199,100 +207,22 @@ def _get_torrent_info(table):
     return torrent_infos
 
 
-def get_torrent(torrent_infos, tags):
-    free_infos = list()
-    for torrent_info in torrent_infos:
-        if torrent_info['tag'] in tags:
-            free_infos.append(torrent_info)
-
-    return free_infos
-
-
-def get_ok_torrent(torrent_infos):
-    ok_infos = list()
+def select_ok_torrent(torrent_infos):
     if len(torrent_infos) >= 20:  # 遇到free或者免费种子太多了，择优选取
-        print('ok种子过多，怀疑free了。。。')
-        for torrent_info in torrent_infos:
-            if torrent_info['seed_id'] in old_torrent:
-                continue
-            if 'GB' not in torrent_info['file_size'][0]:
-                continue
-            if torrent_info['seeding'] <= 0 or torrent_info['downloading'] < 0:
-                continue
-            if torrent_info['seeding'] != 0 and float(torrent_info['downloading']) / float(
-                    torrent_info['seeding']) < 20:
-                continue
-            file_size = torrent_info['file_size'][0]
-            file_size = file_size.replace('GB', '')
-            file_size = float(file_size.strip())
-            if file_size < 20.0:
-                continue
-            ok_infos.append(torrent_info)
-    else:
-        for torrent_info in torrent_infos:
-            if torrent_info['seed_id'] in old_torrent:
-                continue
-            if 'GB' not in torrent_info['file_size'][0]:
-                continue
-            if torrent_info['seeding'] <= 0 or torrent_info['downloading'] < 0:
-                continue
-            if torrent_info['seeding'] != 0 and float(torrent_info['downloading']) / float(torrent_info['seeding']) < \
-                    0.6:
-                continue
-
-            ok_infos.append(torrent_info)
-
-    return ok_infos
-
-
-def download_torrent(op_str):
-    cookie_jar = RequestsCookieJar()
-    for k, v in byrbt_cookies.items():
-        cookie_jar[k] = v
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
-
-    id_re = re.findall(r'dl (\d+)', op_str, re.I)
-    if len(id_re) == 0:
-        print('no such torrent')
-        return
-    torrent_id = id_re[0]
-
-    download_url = 'download.php?id={}'.format(torrent_id)
-    download_url = get_url(download_url)
-    try:
-        torrent = requests.get(download_url, cookies=cookie_jar, headers=headers)
-        torrent_file_name = str(
-            torrent.headers['Content-Disposition'].split(';')[1].strip().split('=')[-1][1:-1].encode('ascii',
-                                                                                                     'ignore').decode(
-                'ascii')).replace(' ', '#')
-        with open(os.path.join(download_path, torrent_file_name), 'wb') as f:
-            f.write(torrent.content)
-
-    except:
-        print('login failed!')
-        return False
-
-    index = 20
-    while index > 0:
-        if os.path.exists(os.path.join(download_path, torrent_file_name)):
-            if osName == 'Linux':
-                torrent_file_path = os.path.join(download_path, torrent_file_name)
-                cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(transmission_user_pw, torrent_file_path)
-                ret_val = os.system(cmd_str)
-                if ret_val != 0:
-                    print('script `{}` returns {}'.format(cmd_str, ret_val))
-                    print('下载失败')
-                else:
-                    print('下载成功')
-            else:
-                print('下载成功')
-            return
-        else:
-            time.sleep(0.5)
-            index = index - 1
-    print('下载失败')
-    return
+        log('ok 种子过多，怀疑 free 了。。。')
+    ok_infos = []
+    for torrent_info in torrent_infos:
+        if torrent_info['seed_id'] in existed_torrent:
+            continue
+        if 'GB' not in torrent_info['file_size'][0]:
+            continue
+        if torrent_info['seeding'] <= 0 or torrent_info['downloading'] < 0:
+            continue
+        ds_ratio=float(torrent_info['downloading']) / float(torrent_info['seeding'])
+        if ds_ratio>0:
+            ok_infos.append((ds_ratio,torrent_info))
+    ok_infos.sort(key=lambda x:x[0],reverse=True)
+    return [j for i,j in ok_infos[0:min(5,len(ok_infos))]]
 
 
 def execCmd(cmd):
@@ -307,239 +237,165 @@ def op_help():
     byrbt bot: a bot that handles basic usage of bt.byr.cn
     usage:
         1. main - run main program
-
-        2. download - download and start torrent file
-            i.e. dl $id
-                $id - torrent id, acquired by `ls` or `se`
-
-        3. list torrent status - list the torrent files status, merely call `transmission-remote -l`
-            i.e. tls
-
-        4. remove torrent - remove specific torrent job, merely call `transmission-remote -t $id -r`
-            i.e. trm $torrent_id
-
         5. refresh - refresh cookies
         6. help - print this message
         7. exit
     """
 
 
-def list_torrent():
-    os.system('transmission-remote -n "{}" -l'.format(transmission_user_pw))
-
-
 def get_info(text):
     text = text.split('\n')
-    sum_to = text[-2]
     text = text[1:-2]
-    text_s = list()
+    text_s = []
     for t in text:
         ts = t.split()
-        torrent = dict()
-        torrent['id'] = ts[0]
-        torrent['done'] = ts[1]
-        torrent['size'] = ts[2] + ts[3]
-        if 'GB' not in torrent['size']:
-            torrent['size'] = '1GB'
-        torrent['name'] = ts[-1]
+        torrent = {'id':ts[0],'done':ts[1],'name':ts[-1]}
+
+        tracker_info=os.popen(transmission_cmd+"-t %s -it"%(torrent['id'])).read()
+        byr_flag=True
+        for i in tracker_info.split("\n\n"):
+            if "tracker.byr.cn" not in i:
+                byr_flag=False
+                break
+        if not byr_flag:
+            continue
+
+        location_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'])).read()
+        for i in location_info.split("\n"):
+            if i.strip().startswith("Location"):
+                location_info=i.split(":")[-1].strip()
+                break
+        else:
+            log("failed to get location info for id %s\n%s"%(torrent['id'],location_info))
+            continue
+        if not os.path.samefile(location_info,linux_download_path):
+            continue
+
+        if ts[3]=="GB":
+            torrent['size']=float(ts[2])
+        elif ts[3]=="TB":
+            torrent['size']=float(ts[2])*1024
+        elif ts[3]=="MB":
+            torrent['size']=float(ts[2])/1024
+        elif ts[3]=="Unknown":
+            torrent['size']=1.0
+        else:
+            log("torrent size unit is neither GB nor TB not MB?\n%s"%(ts),l=2)
+            torrent['size']=1.0
         text_s.append(torrent)
-    sum_to = sum_to.split()
-    sum_size = sum_to[1] + sum_to[2]
-    if 'GB' in sum_size or 'TB' in sum_size:
-        pass
-    else:
-        sum_size = '1GB'
-
-    return text_s, sum_size
-
-
-def remove_torrent(op_str):
-    id_re = re.findall(r'trm (\d+)', op_str, re.I)
-    if len(id_re) == 0:
-        print('no such torrent id')
-        return
-    id_str = id_re[0]
-    id_str = str(id_str)
-
-    text = execCmd('transmission-remote -n "{}" -l'.format(transmission_user_pw))
-    text_s, sum_size = get_info(text)
-    flag = False
-    for to_info in text_s:
-        if to_info['id'] == id_str:
-            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(transmission_user_pw, id_str))
-            if "success" not in res:
-                print('remove torrent fail:')
-                for k, v in to_info.items():
-                    print('{} : {}'.format(k, v))
-            if os.path.exists(os.path.join(download_path, to_info['name'])):
-                cmd_str = 'rm -rf {}'.format(os.path.join(download_path, to_info['name']))
-                ret_val = os.system(cmd_str)
-                if ret_val != 0:
-                    print('script `{}` returns {}'.format(cmd_str, ret_val))
-                    print(
-                        'remove torrent from transmission-daemon success, but cat not remove it from disk!')
-                else:
-                    print('remove torrent from transmission-daemon success!')
-            else:
-                print('remove torrent from transmission-daemon success!')
-            flag = True
-            break
-
-    if flag is False:
-        print('cat find this torrent id in torrent list, please use cmd "tls" ')
+    log("可能删除：%s"%(text_s,))
+    return text_s
 
 
 class TorrentBot(ContextDecorator):
     def __init__(self):
         super(TorrentBot, self).__init__()
-        self.torrent_url = get_url('torrents.php')
         self.cookie_jar = RequestsCookieJar()
         for k, v in byrbt_cookies.items():
             self.cookie_jar[k] = v
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
-        self.tags = ['免费', '免费&2x上传']
-
-    def __enter__(self):
-        print('启动byrbt_bot!')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        print('退出')
-        print('保存数据')
-        pickle.dump(old_torrent, open(torrent_infos, 'wb'), protocol=2)
 
     def remove(self):
-        text = execCmd('transmission-remote -n "{}" -l'.format(transmission_user_pw))
-        text_s, sum_size = get_info(text)
-        if len(text_s) <= max_torrent:
-            return
-        torrent_len = len(text_s)
-        while torrent_len > max_torrent:
-            text_s.sort(key=lambda x: int(x['id'].strip("*")), reverse=False)
+        text=execCmd(transmission_cmd+'-l')
+        text_s=get_info(text) #text_s: list of {'id': '153', 'done': '0%', 'size': '1GB', 'name': 'dadada'}
+        text_s.sort(key=lambda x: int(x['id'].strip("*")), reverse=False) # 删除最久之前的种子
+        while sum([i['size'] for i in text_s]) > max_torrent_size:
             remove_torrent_info = text_s.pop(0)
-            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(transmission_user_pw,
-                                                                                         remove_torrent_info['id']))
+            log("removing %s"%(remove_torrent_info['name']))
+            res = execCmd(transmission_cmd+'-t %s --remove-and-delete'%(remove_torrent_info['id'],))
             if "success" not in res:
-                print('remove torrent fail:')
-                for k, v in remove_torrent_info.items():
-                    print('{} : {}'.format(k, v))
+                log('remove torrent failed: %s'%(remove_torrent_info))
+                continue
 
             if os.path.exists(os.path.join(download_path, remove_torrent_info['name'])):
-                cmd_str = 'rm -rf {}'.format(os.path.join(download_path, remove_torrent_info['name']))
-                ret_val = os.system(cmd_str)
-                if ret_val != 0:
-                    print('script `{}` returns {}'.format(cmd_str, ret_val))
-                    print('remove torrent from transmission-daemon success, but cat not remove it from disk!')
-                else:
-                    print('remove {} from transmission-daemon success!'.format(remove_torrent_info['name']))
+                log('remove %s from transmission-daemon success, but cat not remove it from disk!'%(remove_torrent_info['name']),l=2)
             else:
-                print('remove {} from transmission-daemon success!'.format(remove_torrent_info['name']))
-            torrent_len = torrent_len - 1
+                log('remove %s from transmission-daemon success!'%(remove_torrent_info['name'],))
 
     def download(self, torrent_id):
         global byrbt_cookies
         download_url = 'download.php?id={}'.format(torrent_id)
         download_url = get_url(download_url)
         torrent_file_name = None
-        for i in range(5):
+        for i in range(2):
             try:
                 torrent = requests.get(download_url, cookies=self.cookie_jar, headers=self.headers)
-                torrent_file_name = str(
-                    torrent.headers['Content-Disposition'].split(';')[1].strip().split('=')[-1][1:-1].encode('ascii',
-                                                                                                             'ignore').decode(
-                        'ascii')).replace(' ', '#')
-                print(torrent_file_name)
+                torrent_file_name = str(torrent.headers['Content-Disposition']\
+                                            .split(';')[1]\
+                                            .strip().split('=')[-1][1:-1]\
+                                            .encode('ascii','ignore').decode('ascii')
+                                        ).replace(' ', '#')
+                log("正在下载 %s"%(torrent_file_name,))
                 with open(os.path.join(download_path, torrent_file_name), 'wb') as f:
                     f.write(torrent.content)
                 break
 
             except:
-                print('login failed')
+                log('login failed')
                 byrbt_cookies = load_cookie()
                 self.__init__()
-                continue
 
-        index = 20
-        while index > 0:
-            if torrent_file_name is not None and os.path.exists(os.path.join(download_path, torrent_file_name)):
-                if osName == 'Linux':
-                    torrent_file_path = os.path.join(download_path, torrent_file_name)
-                    cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(transmission_user_pw, torrent_file_path)
-                    ret_val = os.system(cmd_str)
-                    if ret_val != 0:
-                        print('script `{}` returns {}'.format(cmd_str, ret_val))
-                        return True
-                    else:
-                        print('添加种子： {}'.format(torrent_file_name))
-
-                    old_torrent.append(torrent_id)
-                else:
-                    pass
-                return True
+        if torrent_file_name is not None and os.path.exists(os.path.join(download_path, torrent_file_name)):
+            torrent_file_path = os.path.join(download_path, torrent_file_name)
+            cmd_str = transmission_cmd+'-a %s'%(torrent_file_path,)
+            ret_val = os.system(cmd_str)
+            if ret_val != 0:
+                log('script %s returns %s'%(cmd_str, ret_val))
+                return False
             else:
-                time.sleep(0.5)
-                index = index - 1
-
-        return True
+                existed_torrent.append(torrent_id)
+                return True
+        else:
+            return True
 
     def start(self):
         global byrbt_cookies
         while True:
-            print('扫描种子列表')
             try:
-                torrents_soup = BeautifulSoup(
-                    requests.get(self.torrent_url, cookies=self.cookie_jar, headers=self.headers).content)
+                log('正在扫描 %s'%(get_url('torrents.php'),))
+                getemp=requests.get(get_url('torrents.php'),cookies=self.cookie_jar,headers=self.headers).content
+                torrents_soup = BeautifulSoup(getemp,features='lxml')
                 torrent_table = torrents_soup.select('.torrents > form > tr')[1:]
-                pass
             except:
                 byrbt_cookies = load_cookie()
                 self.__init__()
                 continue
-            torrent_infos = _get_torrent_info(torrent_table)
 
-            free_infos = get_torrent(torrent_infos, self.tags)
-            print('种子列表：')
-            for i, info in enumerate(free_infos):
-                print('{} : {} {} {}'.format(i, info['seed_id'], info['file_size'], info['title']))
-            ok_torrent = get_ok_torrent(free_infos)
-            print('可用种子：')
-            for i, info in enumerate(ok_torrent):
-                print('{} : {} {} {}'.format(i, info['seed_id'], info['file_size'], info['title']))
+            torrent_infos = parse_torrent_info(torrent_table)
+
+            free_infos = [torrent_info for torrent_info in torrent_infos if torrent_info['tag'] in ('免费', '免费&2x上传')]
+            #s_temp=['%s : %s %s %s'%(i, info['seed_id'], info['file_size'][0], info['title']) for i, info in enumerate(free_infos)]
+            #log('Free 种子列表：\n%s'%("\n".join(s_temp)))
+
+            ok_torrent = select_ok_torrent(free_infos)
+            s_temp=['%s : %s %s %s'%(i, info['seed_id'], info['file_size'][0], info['title']) for i,info in enumerate(ok_torrent)]
+            log('将要下载：\n%s'%("\n".join(s_temp)))
             for torrent in ok_torrent:
-                if self.download(torrent['seed_id']) is False:
-                    print('{} download fail'.format(torrent['title']))
-                    continue
+                self.download(torrent['seed_id'])
             self.remove()
             time.sleep(search_time)
 
 
 def main():
-    with TorrentBot() as byrbt_bot:
-        byrbt_bot.start()
+    byrbt_bot=TorrentBot()
+    byrbt_bot.start()
 
 
 if __name__ == '__main__':
     byrbt_cookies = load_cookie()
-
-    print(op_help())
+    log(op_help())
     while True:
-        action_str = input()
+        action_str = input("$ ")
         if action_str == 'refresh':
-            print('refresh cookie by login!')
+            log('refresh cookie by login!')
             byrbt_cookies = login()
         elif action_str == 'exit':
             break
         elif action_str == 'help':
-            print(op_help())
+            log(op_help())
         elif action_str == 'main':
             main()
-        elif action_str.startswith('dl'):
-            download_torrent(action_str)
-        elif action_str.startswith('tls'):
-            list_torrent()
-        elif action_str.startswith('trm'):
-            remove_torrent(action_str)
         else:
-            print('invalid operation')
-            print(op_help())
+            log('invalid operation')
+            log(op_help())
