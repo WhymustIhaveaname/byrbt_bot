@@ -16,30 +16,13 @@ from PIL import Image
 import requests
 from requests.cookies import RequestsCookieJar
 from bs4 import BeautifulSoup
-
 from decaptcha import DeCaptcha
-
-# ##################需要配置的变量###################
-_username = '用户名'
-_passwd = '密码'
-_transmission_user_pw = 'user:passwd'  # transmission的用户名和密码，按照格式填入
-_windows_download_path = './torrent'  # windows测试下载种子路径
-_linux_download_path = '<path_to_download_dir>'  # linux服务器下载种子的路径
-_torrent_infos = './torrent.pkl'  # 种子信息保存文件路径
-max_torrent = 20  # 最大种子数
-search_time = 120  # 轮询种子时间，默认120秒
-# ##################################################
-_decaptcha_model = 'captcha_classifier.pkl'  # 验证码识别模型
-_cookies_save_path = 'ByrbtCookies.pickle'  # cookies保存路径
+from config import *
 
 # 判断平台
 osName = platform.system()
-if osName == 'Windows':
-    osName = 'Windows'
-elif osName == 'Linux':
-    osName = 'Linux'
-else:
-    raise Exception('not support this system : {}'.format(osName))
+if osName not in ('Windows','Linux'):
+    raise Exception('not support this system : %s'%(osName,))
 
 # 常量
 _BASE_URL = 'https://bt.byr.cn/'
@@ -70,18 +53,18 @@ download_path = None
 byrbt_cookies = None
 
 if osName == 'Windows':
-    download_path = os.path.abspath(_windows_download_path)
+    download_path = os.path.abspath(windows_download_path)
 elif osName == 'Linux':
-    download_path = os.path.abspath(_linux_download_path)
+    download_path = os.path.abspath(linux_download_path)
 else:
     raise Exception('not support system! {}'.format(osName))
 
 decaptcha = DeCaptcha()
-decaptcha.load_model(_decaptcha_model)
+decaptcha.load_model(decaptcha_model)
 
 old_torrent = list()
-if os.path.exists(_torrent_infos):
-    old_torrent = pickle.load(open(_torrent_infos, 'rb'))
+if os.path.exists(torrent_infos):
+    old_torrent = pickle.load(open(torrent_infos, 'rb'))
 
 
 def get_url(url):
@@ -104,14 +87,14 @@ def login():
         captcha_text = decaptcha.decode(img_file)
 
         login_res = session.post(get_url('takelogin.php'), headers=headers,
-                                 data=dict(username=_username, password=_passwd, imagestring=captcha_text,
+                                 data=dict(username=username, password=passwd, imagestring=captcha_text,
                                            imagehash=img_url.split('=')[-1]))
         if '最近消息' in login_res.text:
             cookies = {}
             for k, v in session.cookies.items():
                 cookies[k] = v
 
-            with open(_cookies_save_path, 'wb') as f:
+            with open(cookies_save_path, 'wb') as f:
                 pickle.dump(cookies, f)
             return cookies
 
@@ -122,12 +105,12 @@ def login():
 
 def load_cookie():
     global byrbt_cookies
-    if os.path.exists(_cookies_save_path):
-        print('find {}, loading cookies'.format(_cookies_save_path))
-        read_path = open(_cookies_save_path, 'rb')
+    if os.path.exists(cookies_save_path):
+        print('find {}, loading cookies'.format(cookies_save_path))
+        read_path = open(cookies_save_path, 'rb')
         byrbt_cookies = pickle.load(read_path)
     else:
-        print('not find {}, get cookies...'.format(_cookies_save_path))
+        print('not find {}, get cookies...'.format(cookies_save_path))
         byrbt_cookies = login()
 
     return byrbt_cookies
@@ -295,7 +278,7 @@ def download_torrent(op_str):
         if os.path.exists(os.path.join(download_path, torrent_file_name)):
             if osName == 'Linux':
                 torrent_file_path = os.path.join(download_path, torrent_file_name)
-                cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(_transmission_user_pw, torrent_file_path)
+                cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(transmission_user_pw, torrent_file_path)
                 ret_val = os.system(cmd_str)
                 if ret_val != 0:
                     print('script `{}` returns {}'.format(cmd_str, ret_val))
@@ -342,7 +325,7 @@ def op_help():
 
 
 def list_torrent():
-    os.system('transmission-remote -n "{}" -l'.format(_transmission_user_pw))
+    os.system('transmission-remote -n "{}" -l'.format(transmission_user_pw))
 
 
 def get_info(text):
@@ -378,12 +361,12 @@ def remove_torrent(op_str):
     id_str = id_re[0]
     id_str = str(id_str)
 
-    text = execCmd('transmission-remote -n "{}" -l'.format(_transmission_user_pw))
+    text = execCmd('transmission-remote -n "{}" -l'.format(transmission_user_pw))
     text_s, sum_size = get_info(text)
     flag = False
     for to_info in text_s:
         if to_info['id'] == id_str:
-            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(_transmission_user_pw, id_str))
+            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(transmission_user_pw, id_str))
             if "success" not in res:
                 print('remove torrent fail:')
                 for k, v in to_info.items():
@@ -424,10 +407,10 @@ class TorrentBot(ContextDecorator):
     def __exit__(self, exc_type, exc_val, exc_tb):
         print('退出')
         print('保存数据')
-        pickle.dump(old_torrent, open(_torrent_infos, 'wb'), protocol=2)
+        pickle.dump(old_torrent, open(torrent_infos, 'wb'), protocol=2)
 
     def remove(self):
-        text = execCmd('transmission-remote -n "{}" -l'.format(_transmission_user_pw))
+        text = execCmd('transmission-remote -n "{}" -l'.format(transmission_user_pw))
         text_s, sum_size = get_info(text)
         if len(text_s) <= max_torrent:
             return
@@ -435,7 +418,7 @@ class TorrentBot(ContextDecorator):
         while torrent_len > max_torrent:
             text_s.sort(key=lambda x: int(x['id'].strip("*")), reverse=False)
             remove_torrent_info = text_s.pop(0)
-            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(_transmission_user_pw,
+            res = execCmd('transmission-remote -n "{}" -t {} --remove-and-delete'.format(transmission_user_pw,
                                                                                          remove_torrent_info['id']))
             if "success" not in res:
                 print('remove torrent fail:')
@@ -482,7 +465,7 @@ class TorrentBot(ContextDecorator):
             if torrent_file_name is not None and os.path.exists(os.path.join(download_path, torrent_file_name)):
                 if osName == 'Linux':
                     torrent_file_path = os.path.join(download_path, torrent_file_name)
-                    cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(_transmission_user_pw, torrent_file_path)
+                    cmd_str = 'transmission-remote -n "{}" -a "{}"'.format(transmission_user_pw, torrent_file_path)
                     ret_val = os.system(cmd_str)
                     if ret_val != 0:
                         print('script `{}` returns {}'.format(cmd_str, ret_val))

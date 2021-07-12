@@ -37,7 +37,7 @@
 
 * 在 byrbt.py 配置信息
 
-   主要配置如下信息。**注意 download_path 千万不要填自己正在用的文件夹，里面的文件会被任意更改甚至删除！**
+   复制 config-example.py 至 config.py，并更改以下信息。**注意 download_path 千万不要填自己正在用的文件夹，里面的文件会被任意更改甚至删除！**
 
    ```python
    _username = '用户名'
