@@ -1,11 +1,12 @@
 # brybt_bot
-**北邮人BT全自动（大概）下载~~刷流~~机器人**
 
-北邮人BT只要上传量高于4TB，并且分享率大于3.05，就能成为**Veteran User**，账户永久保存
+**他不强调这个机器人会删除文件，一上来连警告都没有就把我1个T的文件给删了！！！而且原来仓库代码质量也不高，README 英文和汉字之间也没空格，issue 也没人理，我决定放弃原来的仓库，慢慢重写全部代码。**
 
-![image-20200330161046856](https://github.com/lipssmycode/byrbt_bot/blob/master/images/image-20200330161046856.png)
+- [ ] 更新 requirements.txt
+- [x] 更新 README
+- [ ] 重写 spaghetti codes
 
-本机器人可以利用校园里的服务器进行全自动做种（本人亲测已上传96TB），采用transmission作为下载器，可以从Web端查看种子下载情况
+本机器人可以利用校园里的服务器进行全自动做种（本人亲测已上传96TB），采用 transmission 作为下载器，可以从 Web 端查看种子下载情况
 
 ![image-20200330163255569](https://github.com/lipssmycode/byrbt_bot/blob/master/images/image-20200330163255569.png)
 
@@ -24,113 +25,24 @@
 
 1. #### 用户权限问题
 
-   由于需要使用Transmission，在root用户下配置会比较方便，一般用户可以采用docker实现，将下载数据的文件夹挂载到docker上即可。
+   由于需要使用 Transmission，在 root 用户下配置会比较方便，一般用户可以采用docker实现，将下载数据的文件夹挂载到docker上即可。
 
 2. #### 安装Python3
 
    安装相应依赖包
 
    ```shell
-   pip install -r requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
    sklearn版本为0.22.1可以使用captcha_classifier_sklearn0.22.1.pkl模型，改名为captcha_classifier.pkl即可
 
 3. #### 安装Transmission
 
-   安装Transmission教程如下
-
-   https://www.jianshu.com/p/bbd4f6832268?nomobile=yes
-
-   https://blog.csdn.net/jiyuanyi1992/article/details/44250943
-
-   https://blog.csdn.net/zhaiyingchen/article/details/88049113
-
-   [https://wiki.archlinux.org/index.php/Transmission_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)#%E9%80%89%E6%8B%A9%E4%B8%80%E4%B8%AA%E7%94%A8%E6%88%B7](https://wiki.archlinux.org/index.php/Transmission_(简体中文)#选择一个用户)
-
-   启动配置一般在~/.config/transmission-daemon/settings.json，这里放一个可行的配置
-
-   ```json
-   {
-       "alt-speed-down": 50,
-       "alt-speed-enabled": false,
-       "alt-speed-time-begin": 540,
-       "alt-speed-time-day": 127,
-       "alt-speed-time-enabled": false,
-       "alt-speed-time-end": 1020,
-       "alt-speed-up": 50,
-       "bind-address-ipv4": "0.0.0.0",  //修改
-       "bind-address-ipv6": "::", //修改
-       "blocklist-enabled": false,//修改
-       "blocklist-url": "http://www.example.com/blocklist",
-       "cache-size-mb": 4,
-       "dht-enabled": true,
-       "download-dir": "/home/.bt", //修改为种子文件下载路径
-       "download-queue-enabled": true,
-       "download-queue-size": 5,
-       "encryption": 1,
-       "idle-seeding-limit": 30,
-       "idle-seeding-limit-enabled": false,
-       "incomplete-dir": "/home/.bt", //修改为种子文件下载路径
-       "incomplete-dir-enabled": false,
-       "lpd-enabled": false,
-       "message-level": 1,
-       "peer-congestion-algorithm": "",
-       "peer-id-ttl-hours": 6,
-       "peer-limit-global": 200,
-       "peer-limit-per-torrent": 50,
-       "peer-port": 51413,
-       "peer-port-random-high": 65535,
-       "peer-port-random-low": 49152,
-       "peer-port-random-on-start": false,
-       "peer-socket-tos": "default",
-       "pex-enabled": true,
-       "port-forwarding-enabled": true,
-       "preallocation": 1,
-       "prefetch-enabled": 1,
-       "queue-stalled-enabled": true,
-       "queue-stalled-minutes": 30,
-       "ratio-limit": 2,
-       "ratio-limit-enabled": false,
-       "rename-partial-files": true,
-       "rpc-authentication-required": true,//修改
-       "rpc-bind-address": "0.0.0.0", //修改
-       "rpc-enabled": true, //修改
-       "rpc-host-whitelist": "",//修改
-       "rpc-host-whitelist-enabled": true,//修改
-       "rpc-password": "pw",//密码
-       "rpc-port": 9091,//web访问端口
-       "rpc-url": "/transmission/",//修改
-       "rpc-username": "smy", //用户
-       "rpc-whitelist": "*.*.*.*",//修改
-       "rpc-whitelist-enabled": true,//修改
-       "scrape-paused-torrents-enabled": true,
-       "script-torrent-done-enabled": false,
-       "script-torrent-done-filename": "",
-       "seed-queue-enabled": false,
-       "seed-queue-size": 10,
-       "speed-limit-down": 100,
-       "speed-limit-down-enabled": false,
-       "speed-limit-up": 100,
-       "speed-limit-up-enabled": false,
-       "start-added-torrents": true,
-       "trash-original-torrent-files": false,
-       "umask": 18,
-       "upload-slots-per-torrent": 14,
-       "utp-enabled": true
-   }
-   ```
-
-   启动不成功可以在保证service transmission-daemon是关闭的情况下运行
-
-   ```shell
-   transmission-daemon -g <配置所在的文件夹路径>
-   ```
-
-   访问ip:9091登录web端，出现红种需自行删除，尚未解决自动删除红种的问题
+   [Transmission 搭建笔记](https://github.com/WhymustIhaveaname/Transmission-Block-Xunlei/blob/main/%E6%90%AD%E5%BB%BA%E7%AC%94%E8%AE%B0.md)
 
 4. #### 在byrbt.py配置信息
 
-   主要配置如下信息
+   主要配置如下信息。**注意 download_path 千万不要填自己正在用的文件夹，里面的文件会被任意更改甚至删除！**
 
    ```python
    _username = '用户名'
@@ -146,7 +58,7 @@
 5. #### 启动
 
    ```shell
-   python byrbt.py
+   python3 byrbt.py
    ```
 
 ### Acknowledgements
