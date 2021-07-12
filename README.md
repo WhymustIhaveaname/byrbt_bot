@@ -14,33 +14,27 @@
 
 ![image-20200330163105285](https://github.com/lipssmycode/byrbt_bot/blob/master/images/image-20200330163105285.png)
 
-- [x] 支持识别验证码登录（感谢**[decaptcha](https://github.com/bumzy/decaptcha)**项目）
-- [x] 支持下载种子(感谢**[byrbt_bot](https://github.com/Jason2031/byrbt_bot)**项目)
+- [x] 支持识别验证码登录（感谢 [bumzy/decaptcha](https://github.com/bumzy/decaptcha) 项目）
+- [x] 支持下载种子(感谢 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot) 项目)
 - [x] 支持自动寻找合适的免费种子（默认条件：种子文件大于1G小于1TB大小，下载人数比做种人数大于0.6）
-- [x] 支持识别Free，提高下载种子的条件，择优选取，避免频繁更换下载种子
+- [x] 支持识别 Free，提高下载种子的条件，择优选取，避免频繁更换下载种子
 - [x] 支持自动删除旧种子，下载新种子
-- [x] 支持使用Transmission Web管理种子
+- [x] 支持使用 Transmission Web 管理种子
 
 ### Usage
 
-1. #### 用户权限问题
-
-   由于需要使用 Transmission，在 root 用户下配置会比较方便，一般用户可以采用docker实现，将下载数据的文件夹挂载到docker上即可。
-
-2. #### 安装Python3
-
-   安装相应依赖包
+* 安装相应依赖包
 
    ```shell
    python3 -m pip install -r requirements.txt
    ```
    sklearn版本为0.22.1可以使用captcha_classifier_sklearn0.22.1.pkl模型，改名为captcha_classifier.pkl即可
 
-3. #### 安装Transmission
+* 安装 Transmission
 
    [Transmission 搭建笔记](https://github.com/WhymustIhaveaname/Transmission-Block-Xunlei/blob/main/%E6%90%AD%E5%BB%BA%E7%AC%94%E8%AE%B0.md)
 
-4. #### 在byrbt.py配置信息
+* 在 byrbt.py 配置信息
 
    主要配置如下信息。**注意 download_path 千万不要填自己正在用的文件夹，里面的文件会被任意更改甚至删除！**
 
@@ -55,7 +49,7 @@
    search_time = 120  # 轮询种子时间，默认120秒
    ```
 
-5. #### 启动
+* 启动
 
    ```shell
    python3 byrbt.py
