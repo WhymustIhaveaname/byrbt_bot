@@ -2,8 +2,9 @@
 
 **他不强调这个机器人会删除文件，一上来连警告都没有就把我1个T的文件给删了！！！而且原来仓库代码质量也不高，README 英文和汉字之间也没空格，issue 也没人理，我决定放弃原来的仓库，慢慢重写全部代码。**
 
-- [ ] 更新 requirements.txt
+- [x] 更新 requirements.txt
 - [x] 更新 README
+- [ ] 移动配置至 config.py，与主要逻辑分离
 - [ ] 重写 spaghetti codes
 
 本机器人可以利用校园里的服务器进行全自动做种（本人亲测已上传96TB），采用 transmission 作为下载器，可以从 Web 端查看种子下载情况
