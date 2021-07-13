@@ -72,8 +72,8 @@ sleep_time = 15  # 轮询种子时间，min
 
 * [lipssmycode/byrbt_bot](https://github.com/lipssmycode/byrbt_bot) 
 ~~虽然她代码质量很低并且删了我1个T文件，但是爬虫的部分的确节约了我的时间。~~
-基本上就是个贼。
-主体代码都来自 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)，
+lipssmycode 基本上就是个贼。
+主体代码都来自 [Jason2031](https://github.com/Jason2031)，
 她隐藏 fork 痕迹，对原仓库的贡献只字不提，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
 * [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)
 * [bumzy/decaptcha](https://github.com/bumzy/decaptcha)
