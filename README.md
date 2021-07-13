@@ -1,6 +1,7 @@
 # brybt_bot
 
-**他不强调这个机器人会删除文件，一上来连警告都没有就把我1个T的文件给删了！！！而且原来仓库代码质量低、README 英文和汉字之间没空格、issue 没人理，我决定放弃原来的仓库，慢慢重写全部代码。**
+**上一个作者 [lipssmycode](https://github.com/lipssmycode) 不强调这个机器人会删除文件，一上来连警告都没有就把我1个T的文件给删了！！！
+而且原来仓库代码质量低、README 英文和汉字之间没空格、issue 没人理，我决定放弃原来的仓库，慢慢重写全部代码。**
 
 - [x] 更新 requirements.txt
 - [x] 更新 README
@@ -21,7 +22,10 @@
 - [x] 删除没用的神经网络文件
 - [ ] 进行广泛的测试
 
-**以下是原来的 README (去掉冗余部分之后)**
+**更新：我发现上一个作者 lipssmycode 基本上就是个贼。
+主体代码都来自 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)，
+她隐藏 fork 痕迹，对原仓库的贡献只字不提，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
+还把协议 从 GPL 换成了 MIT，这都是非常不道德的。**
 
 - [x] 支持识别验证码登录（感谢 [bumzy/decaptcha](https://github.com/bumzy/decaptcha) 项目）
 - [x] 支持下载种子(感谢 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot) 项目)
@@ -67,6 +71,10 @@
 
 ### Acknowledgements
 
-* [lipssmycode/byrbt_bot](https://github.com/lipssmycode/byrbt_bot) 虽然她代码质量很低并且删了我1个T文件，但是爬虫的部分的确节约了我的时间。
+* [lipssmycode/byrbt_bot](https://github.com/lipssmycode/byrbt_bot)
+~~虽然她代码质量很低并且删了我1个T文件，但是爬虫的部分的确节约了我的时间。~~
+基本上就是个贼。
+主体代码都来自 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)，
+她隐藏 fork 痕迹，对原仓库的贡献只字不提，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
 * [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)
 * [bumzy/decaptcha](https://github.com/bumzy/decaptcha)
