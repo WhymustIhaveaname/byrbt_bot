@@ -207,11 +207,14 @@ def parse_transmission_ls(text):
             continue
 
         detailed_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'])).read()
-        location_info=re.search("Location: (.+)",detailed_info).group(1)
-        if not os.path.samefile(location_info,linux_download_path):
+        try:
+            location_info=re.search("Location: (.+)",detailed_info).group(1)
+            if not os.path.samefile(location_info,linux_download_path):
+                continue
+            torrent['seed_time']=int(re.search("Seeding Time.+?([0-9]+) seconds",detailed_info).group(1))/86400 # in day
+            torrent['ratio']=float(re.search("Ratio: ([0-9\\.]+)",detailed_info).group(1))
+        except Exception:
             continue
-        torrent['seed_time']=int(re.search("Seeding Time.+?([0-9]+) seconds",detailed_info).group(1))/86400 # in day
-        torrent['ratio']=float(re.search("Ratio: ([0-9\\.]+)",detailed_info).group(1))
 
         if ts[3]=="GB":
             torrent['size']=float(ts[2])
@@ -231,7 +234,7 @@ class TorrentBot(ContextDecorator):
     def __init__(self):
         super(TorrentBot, self).__init__()
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
-        self.existed_torrent = []
+        self.existed_torrent=[]
         self.refresh()
 
     def refresh(self):
@@ -290,13 +293,13 @@ class TorrentBot(ContextDecorator):
                 log('登陆失败',l=2)
                 self.__init__()
         else:
-            return
+            return False
 
         torrent_file_path = os.path.join(download_path,torrent_file_name)
         if os.path.exists(torrent_file_path):
             log("种子文件已存在于 %s"%(torrent_file_path))
             self.existed_torrent.append(torrent_id)
-            return
+            return False
 
         log("正在下载种子文件 %s"%(torrent_file_name,))
         with open(torrent_file_path, 'wb') as f:
@@ -305,9 +308,11 @@ class TorrentBot(ContextDecorator):
         ret_val = os.system(cmd_str)
         if ret_val == 0:
             self.existed_torrent.append(torrent_id)
+            return True
         else:
             log("添加种子文件至 Transmisson 失败！",l=2)
             os.remove(torrent_file_path)
+            return False
 
     def download_many(self,torrent_infos):
         free_wt=2.0 #越大越关注上传比，越小越关注上传量
@@ -342,16 +347,15 @@ class TorrentBot(ContextDecorator):
                 ok_infos.append(i)
 
         ok_infos.sort(key=lambda x:x['value'],reverse=True)
-        ok_infos=ok_infos[0:min(2,len(ok_infos))]
         if len(ok_infos)==0:
             return
 
-        s_temp=['\t%d: %s %sGB %.2f(%.2f days) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title']) for ii,i in enumerate(ok_infos)]
-        log('将要下载：\n%s'%("\n".join(s_temp)))
-
         exist_seeds=parse_transmission_ls(execCmd(transmission_cmd+'-l'))
         torrent_size=sum([i['size'] for i in exist_seeds])
-        for i in ok_infos:
+        ct=0
+        for ii,i in enumerate(ok_infos):
+            s_temp='%d: %s %sGB value %.2f(existed %.2f days) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title'])
+            log('将要下载： %s'%(s_temp))
             torrent_size+=i['file_size']
             if torrent_size>max_torrent_size:
                 log("磁盘空间已满(%.1fGB)，将执行自动清理"%(torrent_size))
@@ -359,7 +363,10 @@ class TorrentBot(ContextDecorator):
                     log("清理磁盘失败，跳过此种子")
                     torrent_size-=i['file_size']
                     continue
-            self.download_one(i['seed_id'])
+            if self.download_one(i['seed_id']):
+                ct+=1
+            if ct>=2:
+                break
 
     def scan_one_page(self,page):
         url="https://bt.byr.cn/torrents.php?inclbookmarked=0&pktype=0&incldead=0&spstate=0&page=%d"%(page)
