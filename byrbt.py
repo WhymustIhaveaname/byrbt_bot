@@ -40,14 +40,6 @@ def log(msg,l=1,end="\n",logfile=LOGFILE):
 
 # 常量
 _BASE_URL = 'https://bt.byr.cn/'
-_tag_map = {
-    'free': '免费',
-    'twoup': '2x上传',
-    'twoupfree': '免费&2x上传',
-    'halfdown': '50%下载',
-    'twouphalfdown': '50%下载&2x上传',
-    'thirtypercent': '30%下载',
-}
 _cat_map = {
     '电影': 'movie',
     '剧集': 'episode',
@@ -63,19 +55,14 @@ _cat_map = {
 
 
 # 全局变量
-download_path = None
-byrbt_cookies = None
-
 if osName == 'Windows':
     download_path = os.path.abspath(windows_download_path)
 elif osName == 'Linux':
     download_path = os.path.abspath(linux_download_path)
-log(download_path)
 
 decaptcha = DeCaptcha()
 decaptcha.load_model(decaptcha_model)
 
-existed_torrent = []
 transmission_cmd='transmission-remote -n %s '%(transmission_user_pw)
 
 def get_url(url):
@@ -110,7 +97,6 @@ def login():
 
 
 def load_cookie():
-    global byrbt_cookies
     if os.path.exists(cookies_save_path):
         log('正在加载 %s 中的 cookie...'%(cookies_save_path,))
         with open(cookies_save_path, 'rb') as read_path:
@@ -122,127 +108,90 @@ def load_cookie():
 
 
 def _get_tag(tag):
-    try:
-        if tag == '':
-            return ''
-        else:
-            tag = tag.split('_')[0]
+    """可能的 tags
+        'free', 'twoup', 'twoupfree', 'halfdown', 'twouphalfdown', 'thirtypercentdown'
+        '免费' , '2x上传', '免费&2x上传', '50%下载' , '50%下载&2x上传' , '30%下载',
+    """
+    if len(tag)>0:
+        return tag.split('_')[0] # 去掉最后的 _bg
 
-        return _tag_map[tag]
-    except KeyError:
-        return ''
+def _calc_size(size):
+    size=size.strip()
+    if size.endswith("GB"):
+        size=float(size[0:-2])
+    elif size.endswith("TB"):
+        size=float(size[0:-2])*1024
+    elif size.endswith("MB"):
+        size=float(size[0:-2])/1024
+    elif size.endswith("KB"):
+        size=float(size[0:-2])/1048576
+    else:
+        log("size format error: %s"%(size),l=2)
+        size=0.0
+    return size
 
 
 def parse_torrent_info(table):
     assert isinstance(table, list)
+    l_time=[("年",8760),("月",720),("天",24),("时",1),("分",1/60)]
     torrent_infos = []
     for item in table:
-        torrent_info = {}
+        # tds 是网页上每一列的列表
+        # 依次是， 0    1    2   5       6   7     8     9
+        #        类型、题目、评论、存活时间、大小、做种数、下载数、完成数、
         tds = item.select('td')
-        cat = tds[0].select('img')[0].attrs['title']
-        main_td = tds[1].select('table > tr > td')[0]
-        href = main_td.select('a')[0].attrs['href']
-        seed_id = re.findall(r'id=(\d+)&', href)[0]
-        title = main_td.text
-        title = title.split('\n')
-        if len(title) == 2:
-            sub_title = title[1]
-            title = title[0]
-        else:
-            sub_title = ''
-            title = title[0]
 
-        tags = set([font.attrs['class'][0] for font in main_td.select('b > font') if 'class' in font.attrs.keys()])
-        if '' in tags:
-            tags.remove('')
-
+        main_td = tds[1].select('table > tr > td')[0] # 第一列是信息最丰富的，值得一个单独的名字
         is_seeding = len(main_td.select('img[src="pic/seeding.png"]')) > 0
         is_finished = len(main_td.select('img[src="pic/finished.png"]')) > 0
         if is_seeding or is_finished:
             continue
 
-        is_hot = False
-        if 'hot' in tags:
-            is_hot = True
-            tags.remove('hot')
-        is_new = False
-        if 'new' in tags:
-            is_new = True
-            tags.remove('new')
-        is_recommended = False
-        if 'recommended' in tags:
-            is_recommended = True
-            tags.remove('recommended')
+        torrent_info = {'is_new':False,'is_hot':False,'is_recommended':False, 'tag':''}
+
+        title = main_td.text.split('\n')
+        torrent_info['title'] = title[0]
+        torrent_info['sub_title'] = title[1] if len(title) == 2 else ''
+
+        href = main_td.select('a')[0].attrs['href']
+        torrent_info['seed_id'] = re.findall(r'id=(\d+)&', href)[0]
+
+        temp = set([font.attrs['class'][0] for font in main_td.select('b > font') if 'class' in font.attrs.keys()])
+        if 'hot' in temp:
+            torrent_info['is_hot'] = True
+        if 'new' in temp:
+            torrent_info['is_new'] = True
+        if 'recommended' in temp:
+            torrent_info['is_recommended'] = True
 
         if 'class' in tds[1].select('table > tr')[0].attrs.keys():
-            tag = _get_tag(tds[1].select('table > tr')[0].attrs['class'][0])
-        else:
-            tag = ''
+            torrent_info['tag'] = _get_tag(tds[1].select('table > tr')[0].attrs['class'][0])
 
-        file_size = tds[6].text.split('\n')
-        seeding = int(tds[7].text) if tds[7].text.isdigit() else -1
-        downloading = int(tds[8].text) if tds[8].text.isdigit() else -1
-        finished = int(tds[9].text) if tds[9].text.isdigit() else -1
+        torrent_info['cat'] = tds[0].select('img')[0].attrs['title']
+        torrent_info['file_size'] = _calc_size(tds[6].text)
+        torrent_info['seeding'] = int(tds[7].text) if tds[7].text.isdigit() else -1
+        torrent_info['downloading'] = int(tds[8].text) if tds[8].text.isdigit() else -1
+        torrent_info['finished'] = int(tds[9].text) if tds[9].text.isdigit() else -1
 
-        torrent_info['cat'] = cat
-        torrent_info['tag'] = tag
-        torrent_info['is_seeding'] = is_seeding
-        torrent_info['is_finished'] = is_finished
-        torrent_info['seed_id'] = seed_id
-        torrent_info['title'] = title
-        torrent_info['sub_title'] = sub_title
-        torrent_info['file_size'] = file_size
-        torrent_info['seeding'] = seeding
-        torrent_info['downloading'] = downloading
-        torrent_info['finished'] = finished
-        torrent_info['is_new'] = is_new
-        torrent_info['is_hot'] = is_hot
-        torrent_info['is_recommended'] = is_recommended
+        time=tds[5].text
+        torrent_info['live_time'] = 1 # in hour, 1 in case sigularity
+        for k,v in l_time:
+            if k in time:
+                time=time.split(k)
+                torrent_info['live_time']+=int(time[0].strip())*v
+                time=time[1].strip()
         torrent_infos.append(torrent_info)
 
     return torrent_infos
 
-
-def select_ok_torrent(torrent_infos):
-    if len(torrent_infos) >= 20:
-        log('ok 种子过多，怀疑 free 了。。。')
-    ok_infos = []
-    for torrent_info in torrent_infos:
-        if torrent_info['seed_id'] in existed_torrent:
-            continue
-        if 'GB' not in torrent_info['file_size'][0]:
-            continue
-        if torrent_info['seeding'] <= 0 or torrent_info['downloading'] < 0:
-            continue
-        ds_ratio=float(torrent_info['downloading']) / float(torrent_info['seeding'])
-        if ds_ratio>0.8:
-            ok_infos.append((ds_ratio,torrent_info))
-    ok_infos.sort(key=lambda x:x[0],reverse=True)
-    return [j for i,j in ok_infos[0:min(3,len(ok_infos))]]
-
-
 def execCmd(cmd):
-    r = os.popen(cmd)
-    text = r.read()
-    r.close()
+    with os.popen(cmd) as r:
+        text = r.read()
     return text
 
-
-def op_help():
-    return """
-    byrbt bot: a bot that handles basic usage of bt.byr.cn
-    usage:
-        main - run main program
-        refresh - refresh cookies
-        remove - 执行自动清理
-        help - print this message
-        exit
-    """
-
-
 def parse_transmission_ls(text):
-    text = text.split('\n')
-    text = text[1:-2]
+    """list of {'id': '153', 'done': '0%', 'size': '1GB', 'name': 'dadada'}"""
+    text = text.split('\n')[1:-2]
     text_s = []
     for t in text:
         ts = t.split()
@@ -257,16 +206,12 @@ def parse_transmission_ls(text):
         if not byr_flag:
             continue
 
-        location_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'])).read()
-        for i in location_info.split("\n"):
-            if i.strip().startswith("Location"):
-                location_info=i.split(":")[-1].strip()
-                break
-        else:
-            log("failed to get location info for id %s\n%s"%(torrent['id'],location_info))
-            continue
+        detailed_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'])).read()
+        location_info=re.search("Location: (.+)",detailed_info).group(1)
         if not os.path.samefile(location_info,linux_download_path):
             continue
+        torrent['seed_time']=int(re.search("Seeding Time.+?([0-9]+) seconds",detailed_info).group(1))/86400 # in day
+        torrent['ratio']=float(re.search("Ratio: ([0-9\\.]+)",detailed_info).group(1))
 
         if ts[3]=="GB":
             torrent['size']=float(ts[2])
@@ -282,34 +227,49 @@ def parse_transmission_ls(text):
         text_s.append(torrent)
     return text_s
 
-
 class TorrentBot(ContextDecorator):
     def __init__(self):
         super(TorrentBot, self).__init__()
+        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
+        self.existed_torrent = []
+        self.refresh()
+
+    def refresh(self):
+        byrbt_cookies = load_cookie()
         self.cookie_jar = RequestsCookieJar()
         for k, v in byrbt_cookies.items():
             self.cookie_jar[k] = v
-        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
 
-    def remove(self):
-        text_s=parse_transmission_ls(execCmd(transmission_cmd+'-l')) #list of {'id': '153', 'done': '0%', 'size': '1GB', 'name': 'dadada'}
-        text_s.sort(key=lambda x: int(x['id'].strip("*")), reverse=False) # 删除最久之前的种子
-        log("可能删除：%s"%(text_s))
-        while sum([i['size'] for i in text_s]) > max_torrent_size:
-            remove_torrent_info = text_s.pop(0)
-            log("removing %s"%(remove_torrent_info['name']))
+    def remove(self,target_size):
+        exist_seeds=[]
+        for i in parse_transmission_ls(execCmd(transmission_cmd+'-l')):
+            if i['id'][-1]=="*": # 未完成的后面有星号
+                continue
+            if i['seed_time']<7: # 两周之内的
+                continue
+            i['value']=i['ratio']/i['seed_time']
+            exist_seeds.append(i)
+        exist_seeds.sort(key=lambda x: int(x['value'])) # 删除最久之前的种子
+        #log("可能删除：%s"%(exist_seeds))
+
+        del_size=0
+        while del_size<target_size:
+            remove_torrent_info = exist_seeds.pop(0)
+            log("正在删除 %s"%(remove_torrent_info['name']))
             res = execCmd(transmission_cmd+'-t %s --remove-and-delete'%(remove_torrent_info['id'],))
             if "success" not in res:
                 log('remove torrent failed: %s'%(remove_torrent_info))
                 continue
-
             if os.path.exists(os.path.join(download_path, remove_torrent_info['name'])):
                 log('remove %s from transmission-daemon success, but cat not remove it from disk!'%(remove_torrent_info['name']),l=2)
-            else:
-                log('remove %s from transmission-daemon success!'%(remove_torrent_info['name'],))
+                continue
+            del_size+=remove_torrent_info['size']
+        if del_size>target_size:
+            return True
+        else:
+            return False
 
-    def download(self, torrent_id):
-        global byrbt_cookies
+    def download_one(self, torrent_id):
         download_url = get_url('download.php?id=%s'%(torrent_id))
         torrent_file_name = None
         for i in range(2):
@@ -321,79 +281,131 @@ class TorrentBot(ContextDecorator):
                                         .replace(' ', '#')
                 if torrent_file_name is not None:
                     break
-            except:
+            except Exception:
                 log('登陆失败',l=2)
-                byrbt_cookies = load_cookie()
                 self.__init__()
+        else:
+            return
 
         torrent_file_path = os.path.join(download_path,torrent_file_name)
         if os.path.exists(torrent_file_path):
             log("种子文件已存在于 %s"%(torrent_file_path))
-            existed_torrent.append(torrent_id)
+            self.existed_torrent.append(torrent_id)
             return
+
+        log("正在下载种子文件 %s"%(torrent_file_name,))
+        with open(torrent_file_path, 'wb') as f:
+            f.write(torrent.content)
+        cmd_str = transmission_cmd+'-a %s -w %s'%(torrent_file_path,download_path)
+        ret_val = os.system(cmd_str)
+        if ret_val == 0:
+            self.existed_torrent.append(torrent_id)
         else:
-            log("正在下载种子文件 %s"%(torrent_file_name,))
-            with open(torrent_file_path, 'wb') as f:
-                f.write(torrent.content)
-            cmd_str = transmission_cmd+'-a %s -w %s'%(torrent_file_path,download_path)
-            ret_val = os.system(cmd_str)
-            if ret_val == 0:
-                existed_torrent.append(torrent_id)
-            else:
-                log("添加种子文件至 Transmisson 失败！",l=2)
-                os.system("rm %s"%(torrent_file_path))
+            log("添加种子文件至 Transmisson 失败！",l=2)
+            os.system("rm %s"%(torrent_file_path))
+
+    def download_many(self,torrent_infos):
+        free_wt=1.0 #越大越关注上传比，越小越关注上传量
+        ok_infos=[] #将要下载的种子
+        for i in torrent_infos:
+            if i['seed_id'] in self.existed_torrent:
+                continue
+            if i['file_size']<1:
+                continue
+            if i['seeding']>30: # 不跟他们卷
+                continue
+
+            i['value']=i['finished']/i['live_time'] # 平均每天有多少下载
+            if i['value']<0:
+                continue
+            if 'twoup' in i['tag']:
+                i['value']*=2
+            if 'free' in i['tag']:
+                i['value']+=1*free_wt
+            elif 'halfdown' in i['tag']:
+                i['value']+=0.5*free_wt
+            elif 'thirtypercentdown' in i['tag']:
+                i['value']+=0.7*free_wt
+
+            # 我不想下太大的文件
+            if i['file_size']>50:
+                i['value']*=0.5
+            elif i['file_size']>20:
+                i['value']*=0.8
+
+            if i['value']>0.5:
+                ok_infos.append(i)
+
+        ok_infos.sort(key=lambda x:x['value'],reverse=True)
+        ok_infos=ok_infos[0:min(2,len(ok_infos))]
+        if len(ok_infos)==0:
+            return
+
+        s_temp=['\t%d: %s %sGB %.2f(%.2f days) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title']) for ii,i in enumerate(ok_infos)]
+        log('将要下载：\n%s'%("\n".join(s_temp)))
+
+        exist_seeds=parse_transmission_ls(execCmd(transmission_cmd+'-l'))
+        torrent_size=sum([i['size'] for i in exist_seeds])
+        for t in ok_infos:
+            torrent_size+=t['file_size']
+            if torrent_size>max_torrent_size:
+                log("磁盘空间已满(%.1fGB)，将执行自动清理"%(torrent_size))
+                if not self.remove(t['file_size']):
+                    log("清理磁盘失败，跳过此种子")
+                    torrent_size-=t['file_size']
+                    continue
+            self.download_one(t['seed_id'])
 
     def scan_one_page(self,page):
-        global byrbt_cookies
         url="https://bt.byr.cn/torrents.php?inclbookmarked=0&pktype=0&incldead=0&spstate=0&page=%d"%(page)
         try:
             log('正在扫描：%s'%(url))
             getemp=requests.get(url,cookies=self.cookie_jar,headers=self.headers).content
             torrents_soup = BeautifulSoup(getemp,features='lxml')
-            torrent_table = torrents_soup.select('.torrents > form > tr')[1:]
-        except:
-            byrbt_cookies = load_cookie()
+            torrent_table = torrents_soup.select('.torrents > form > tr')[1:] #<table class="torrents" blabla>
+            return parse_torrent_info(torrent_table)
+        except Exception:
             self.__init__()
-            return
-
-        torrent_infos = parse_torrent_info(torrent_table)
-        free_infos = [i for i in torrent_infos if i['is_hot'] or i['is_recommended'] or i['tag'] in ('免费','免费&2x上传','50%下载&2x上传','30%下载')]
-        #s_temp=['%s : %s %s %s'%(i, info['seed_id'], info['file_size'][0], info['title']) for i, info in enumerate(free_infos)]
-        #log('Free 种子列表：\n%s'%("\n".join(s_temp)))
-
-        ok_infos = select_ok_torrent(free_infos)
-        s_temp=['%s : %s %s %s'%(i, info['seed_id'], info['file_size'][0], info['title']) for i,info in enumerate(ok_infos)]
-        if len(s_temp)>0:
-            log('将要下载：\n%s'%("\n".join(s_temp)))
-        for torrent in ok_infos:
-            self.download(torrent['seed_id'])
+            return []
 
     def start(self):
         while True:
+            tik=time.time()
+            torrent_infos=[]
             for i in range(5):
                 time.sleep(i)
-                self.scan_one_page(i)
-            self.remove()
-            time.sleep(search_time)
+                torrent_infos+=self.scan_one_page(i)
+            self.download_many(torrent_infos)
+            tok=time.time()
+            time.sleep(max(0,sleep_time*60-(tok-tik)))
 
+HELP_TEXT="""
+    byrbt bot:
+        a bot that handles basic usage of bt.byr.cn
+    usage:
+        main - run main program
+        refresh - refresh cookies
+        remove - 执行自动清理
+        help - print this message
+        exit
+"""
 
 if __name__ == '__main__':
-    log(op_help())
-    byrbt_cookies = load_cookie()
+    log(HELP_TEXT)
     byrbt_bot=TorrentBot()
     while True:
         action_str = input("$ ")
         if action_str == 'refresh':
             log('refresh cookie by login!')
-            byrbt_cookies = login()
+            byrbt_bot.refresh()
         elif action_str == 'exit':
             break
         elif action_str == 'help':
-            log(op_help())
+            log(HELP_TEXT)
         elif action_str == 'main':
             byrbt_bot.start()
         elif action_str == 'remove':
-            byrbt_bot.remove()
+            byrbt_bot.remove(max_torrent_size*0.2)
         else:
             log('invalid operation')
-            log(op_help())
+            log(HELP_TEXT)
