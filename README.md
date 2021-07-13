@@ -13,24 +13,24 @@
 - [x] 清除无用命令，那些可以用网页控制台的命令有必要再写一遍吗？而且好多代码竟然不是复用的！
 - [x] 重命名部分函数，原来所有函数都是 get 开头，改成更具有意义的 select、parse 等
 - [x] 增加日志机制
-- [x] 重写下载种子的逻辑：按种子存在以来平均每天被下载次数排序，不同的 free 加不同的 buff，下最受欢迎的
-- [x] 重写空间满时删除种子的逻辑：按我做种以来平均每天的上传比排序，删没人要的
+- [x] 重写下载种子的逻辑：按种子平均每天增加作种率期望排序，不同的 free 加不同的 buff，下最受欢迎的
+- [x] 重写空间满时删除种子的逻辑：按我做种以来平均每天的上传比排序，使用 MCTS 中的 UCB 算法删没人要的
 - [x] 获取更多页的种子而不仅仅是第一页
 - [x] 删除没用的神经网络文件
 - [ ] 进行广泛的测试
 
 **更新：我发现上一个作者 lipssmycode 基本上就是个贼。
 主体代码都来自 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)，
-她隐藏 fork 痕迹，对原仓库的贡献只字不提，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
-还把协议 从 GPL 换成了 MIT，这都是非常不道德的。**
+她隐藏 fork 痕迹，淡化原仓库的贡献，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
+还把协议 从 GPL 换成了 MIT，这都是非常不道德的。
+最让我生气的还是她的代码质量太低了，读她的代码就像手榴弹在大脑中爆炸一样上头。**
 
 ### Features
 
 - [x] 支持识别验证码登录（感谢 [bumzy/decaptcha](https://github.com/bumzy/decaptcha) 项目）
 - [x] 支持下载种子(感谢 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot) 项目)
-- [x] 支持自动寻找合适的免费种子（默认条件：种子文件大于1G小于1TB大小，下载人数比做种人数大于0.6）
-- [x] 支持识别 Free，提高下载种子的条件，择优选取，避免频繁更换下载种子
-- [x] 支持自动删除旧种子，下载新种子
+- [x] 支持自动寻找合适的种子：下载最能提高做种率的（最受大家欢迎且做种人数不那么多的）种子
+- [x] 支持自动删除旧种子，下载新种子：使用 UCB 算法 决定何时换新种子
 - [x] 支持使用 Transmission Web 管理种子
 
 ### Usage
@@ -58,6 +58,7 @@ transmission_user_pw = 'user:passwd'  # transmission的用户名和密码，按�
 linux_download_path = '<path_to_download_dir>'  # linux服务器下载种子的路径
 max_torrent_size = 512  # 最大文件大小，GB
 sleep_time = 15  # 轮询种子时间，min
+check_page = 5   # 检查种子页前多少页
 ```
 
 * 启动！
@@ -70,10 +71,10 @@ sleep_time = 15  # 轮询种子时间，min
 
 ### Acknowledgements
 
-* [lipssmycode/byrbt_bot](https://github.com/lipssmycode/byrbt_bot) 
+* [lipssmycode/byrbt_bot](https://github.com/lipssmycode/byrbt_bot)
 ~~虽然她代码质量很低并且删了我1个T文件，但是爬虫的部分的确节约了我的时间。~~
 lipssmycode 基本上就是个贼。
 主体代码都来自 [Jason2031](https://github.com/Jason2031)，
-她隐藏 fork 痕迹，对原仓库的贡献只字不提，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
+她隐藏 fork 痕迹，淡化原仓库的贡献，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
 * [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot)
 * [bumzy/decaptcha](https://github.com/bumzy/decaptcha)

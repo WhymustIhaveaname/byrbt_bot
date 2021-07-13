@@ -98,7 +98,7 @@ def login():
 
 def load_cookie():
     if os.path.exists(cookies_save_path):
-        log('正在加载 %s 中的 cookie...'%(cookies_save_path,))
+        log('正在加载 cookie...')
         with open(cookies_save_path, 'rb') as read_path:
             byrbt_cookies = pickle.load(read_path)
     else:
@@ -240,7 +240,7 @@ class TorrentBot(ContextDecorator):
         for k, v in byrbt_cookies.items():
             self.cookie_jar[k] = v
 
-    def remove(self,target_size):
+    def remove(self,target_size,neo_value):
         exist_seeds=[]
         for i in parse_transmission_ls(execCmd(transmission_cmd+'-l')):
             if i['id'][-1]=="*": # 未完成的后面有星号
@@ -249,21 +249,26 @@ class TorrentBot(ContextDecorator):
                 continue
             i['value']=i['ratio']/i['seed_time']
             exist_seeds.append(i)
-        exist_seeds.sort(key=lambda x: int(x['value'])) # 删除最久之前的种子
-        #log("可能删除：%s"%(exist_seeds))
+        exist_seeds.sort(key=lambda x: int(x['value']))
+        value_avg=[i['value'] for i in exist_seeds]
+        value_avg=sum(value_avg)/len(value_avg)
+        log("average seed value: %.2f"%(value_avg))
 
         del_size=0
-        while del_size<target_size:
-            remove_torrent_info = exist_seeds.pop(0)
-            log("正在删除 %s"%(remove_torrent_info['name']))
-            res = execCmd(transmission_cmd+'-t %s --remove-and-delete'%(remove_torrent_info['id'],))
+        while del_size<target_size or len(exist_seeds)==0:
+            rm_info = exist_seeds.pop(0)
+            ucb=math.sqrt(math.log(rm_info['seed_time'])/rm_info['seed_time'])
+            if neo_value+value_avg*ucb<rm_info['value']:
+                continue
+            log("正在删除 %s"%(remove_info['name']))
+            res = execCmd(transmission_cmd+'-t %s --remove-and-delete'%(rm_info['id'],))
             if "success" not in res:
-                log('remove torrent failed: %s'%(remove_torrent_info))
+                log('删除失败 %s'%(rm_info))
                 continue
-            if os.path.exists(os.path.join(download_path, remove_torrent_info['name'])):
-                log('remove %s from transmission-daemon success, but cat not remove it from disk!'%(remove_torrent_info['name']),l=2)
+            if os.path.exists(os.path.join(download_path, rm_info['name'])):
+                log('删除成功，但文件似乎还在 %s'%(rm_info['name']),l=2)
                 continue
-            del_size+=remove_torrent_info['size']
+            del_size+=rm_info['size']
         if del_size>target_size:
             return True
         else:
@@ -296,44 +301,44 @@ class TorrentBot(ContextDecorator):
         log("正在下载种子文件 %s"%(torrent_file_name,))
         with open(torrent_file_path, 'wb') as f:
             f.write(torrent.content)
-        cmd_str = transmission_cmd+'-a %s -w %s'%(torrent_file_path,download_path)
+        cmd_str = transmission_cmd+'-a "%s" -w %s'%(torrent_file_path,download_path)
         ret_val = os.system(cmd_str)
         if ret_val == 0:
             self.existed_torrent.append(torrent_id)
         else:
             log("添加种子文件至 Transmisson 失败！",l=2)
-            os.system("rm %s"%(torrent_file_path))
+            os.remove(torrent_file_path)
 
     def download_many(self,torrent_infos):
-        free_wt=1.0 #越大越关注上传比，越小越关注上传量
+        free_wt=2.0 #越大越关注上传比，越小越关注上传量
         ok_infos=[] #将要下载的种子
         for i in torrent_infos:
             if i['seed_id'] in self.existed_torrent:
                 continue
             if i['file_size']<1:
                 continue
-            if i['seeding']>30: # 不跟他们卷
+            if i['seeding']<=0 or i['finished']<=0:
                 continue
 
-            i['value']=i['finished']/i['live_time'] # 平均每天有多少下载
-            if i['value']<0:
-                continue
+            i['value']=i['finished']/(i['live_time']*i['seeding']) # 平均每天上传率可以增加多少
             if 'twoup' in i['tag']:
                 i['value']*=2
             if 'free' in i['tag']:
-                i['value']+=1*free_wt
+                i['value']*=free_wt
             elif 'halfdown' in i['tag']:
-                i['value']+=0.5*free_wt
+                i['value']*=0.5*free_wt
             elif 'thirtypercentdown' in i['tag']:
-                i['value']+=0.7*free_wt
+                i['value']*=0.7*free_wt
 
             # 我不想下太大的文件
             if i['file_size']>50:
                 i['value']*=0.5
-            elif i['file_size']>20:
+            elif i['file_size']>30:
                 i['value']*=0.8
+            elif i['file_size']>20:
+                i['value']*=0.9
 
-            if i['value']>0.5:
+            if i['value']>1/30: # 一个月回本
                 ok_infos.append(i)
 
         ok_infos.sort(key=lambda x:x['value'],reverse=True)
@@ -346,15 +351,15 @@ class TorrentBot(ContextDecorator):
 
         exist_seeds=parse_transmission_ls(execCmd(transmission_cmd+'-l'))
         torrent_size=sum([i['size'] for i in exist_seeds])
-        for t in ok_infos:
-            torrent_size+=t['file_size']
+        for i in ok_infos:
+            torrent_size+=i['file_size']
             if torrent_size>max_torrent_size:
                 log("磁盘空间已满(%.1fGB)，将执行自动清理"%(torrent_size))
-                if not self.remove(t['file_size']):
+                if not self.remove(i['file_size'],i['value']):
                     log("清理磁盘失败，跳过此种子")
-                    torrent_size-=t['file_size']
+                    torrent_size-=i['file_size']
                     continue
-            self.download_one(t['seed_id'])
+            self.download_one(i['seed_id'])
 
     def scan_one_page(self,page):
         url="https://bt.byr.cn/torrents.php?inclbookmarked=0&pktype=0&incldead=0&spstate=0&page=%d"%(page)
@@ -372,7 +377,7 @@ class TorrentBot(ContextDecorator):
         while True:
             tik=time.time()
             torrent_infos=[]
-            for i in range(5):
+            for i in range(check_page):
                 time.sleep(i)
                 torrent_infos+=self.scan_one_page(i)
             self.download_many(torrent_infos)
@@ -385,7 +390,6 @@ HELP_TEXT="""
     usage:
         main - run main program
         refresh - refresh cookies
-        remove - 执行自动清理
         help - print this message
         exit
 """
@@ -405,7 +409,7 @@ if __name__ == '__main__':
         elif action_str == 'main':
             byrbt_bot.start()
         elif action_str == 'remove':
-            byrbt_bot.remove(max_torrent_size*0.2)
+            byrbt_bot.remove(max_torrent_size*0.2,-100.0)
         else:
             log('invalid operation')
             log(HELP_TEXT)
