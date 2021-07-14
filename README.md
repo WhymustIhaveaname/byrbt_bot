@@ -35,8 +35,8 @@
 
 <table>
     <tr>
-        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/figures/terminal.png"/></th>
-        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/figures/web.png"/></th>
+        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/images/terminal.png"/></th>
+        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/images/web.png"/></th>
     </tr>
     <tr>
         <th>命令行输出</th>
