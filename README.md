@@ -53,7 +53,6 @@
    ```shell
    python3 -m pip install -r requirements.txt
    ```
-   sklearn版本为0.22.1可以使用captcha_classifier_sklearn0.22.1.pkl模型，改名为captcha_classifier.pkl即可
 
 * 安装 Transmission
 
@@ -61,26 +60,35 @@
 
 * 在 byrbt.py 配置信息
 
-   复制 config-example.py 至 config.py，并更改以下信息。**注意 download_path 千万不要填自己正在用的文件夹，里面的文件会被任意更改甚至删除！**
+   复制 config-example.py 至 config.py，并更改以下信息。**注意 download_path 不要填自己正在用的文件夹，里面的文件可能会被删除！**
 
 ```python
 username = '用户名'
 passwd = '密码'
-transmission_user_pw = 'user:passwd'  # transmission的用户名和密码，按照格式填入
-#windows_download_path = ''  # 暂不支持
-linux_download_path = '<path_to_download_dir>'  # linux服务器下载种子的路径
+transmission_user_pw = 'user:passwd'  # transmission 的用户名和密码，按照格式填入
+linux_download_path = '<path_to_download_dir>'  # 下载路径
 max_torrent_size = 512  # 最大文件大小，GB
-sleep_time = 15  # 轮询种子时间，min
 check_page = 5   # 检查种子页前多少页
 ```
 
 * 启动！
 
    ```shell
-   python3 byrbt.py
+   python3 byrbt.py --help
+   python3 byrbt.py --main
    ```
 
-   之后会打印 help 然后弹出命令提示符“$”，输入相应命令即可，一般“main”是大家需要的。
+* 使用 crontab 重复执行脚本
+
+    [使用crontab重复执行脚本](https://github.com/WhymustIhaveaname/TsinghuaTunet#%E4%BD%BF%E7%94%A8crontab%E9%87%8D%E5%A4%8D%E6%89%A7%E8%A1%8C%E8%84%9A%E6%9C%AC)
+
+我的对应的 crontab 是
+
+```
+25 */6 * * * cd /home/dAlembert/byrbt_bot && ./byrbt.py --main
+```
+
+意思是整除 6 的小时的第 25 分钟执行。
 
 ### Acknowledgements
 

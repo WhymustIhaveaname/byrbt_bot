@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # @Time    : 2020 July
 # @Author  : smyyan & ghoskno & WhymustIhaveaname
@@ -98,7 +98,7 @@ def login():
 
 def load_cookie():
     if os.path.exists(cookies_save_path):
-        log('正在加载 cookie...')
+        #log('正在加载 cookie...')
         with open(cookies_save_path, 'rb') as read_path:
             byrbt_cookies = pickle.load(read_path)
     else:
@@ -129,7 +129,6 @@ def _calc_size(size):
         log("size format error: %s"%(size),l=2)
         size=0.0
     return size
-
 
 def parse_torrent_info(table):
     assert isinstance(table, list)
@@ -189,11 +188,11 @@ def execCmd(cmd):
         text = r.read()
     return text
 
-def parse_transmission_ls(text):
-    """list of {'id': '153', 'done': '0%', 'size': '1GB', 'name': 'dadada'}"""
-    text = text.split('\n')[1:-2]
-    text_s = []
-    for t in text:
+def transmission_ls():
+    """text_s is list of {'id': '153', 'done': '0%', 'size': '1GB', 'name': 'dadada'}"""
+    text=execCmd(transmission_cmd+'-l')
+    text_s=[]
+    for t in text.split('\n')[1:-2]: #去掉第一和最后两个
         ts = t.split()
         torrent = {'id':ts[0],'done':ts[1],'name':ts[-1]}
 
@@ -206,27 +205,24 @@ def parse_transmission_ls(text):
         if not byr_flag:
             continue
 
-        detailed_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'])).read()
+        detailed_info=os.popen(transmission_cmd+"-t %s -i"%(torrent['id'].strip("*"))).read()
         try:
             location_info=re.search("Location: (.+)",detailed_info).group(1)
             if not os.path.samefile(location_info,linux_download_path):
                 continue
-            torrent['seed_time']=int(re.search("Seeding Time.+?([0-9]+) seconds",detailed_info).group(1))/86400 # in day
-            torrent['ratio']=float(re.search("Ratio: ([0-9\\.]+)",detailed_info).group(1))
-        except Exception:
-            continue
 
-        if ts[3]=="GB":
-            torrent['size']=float(ts[2])
-        elif ts[3]=="TB":
-            torrent['size']=float(ts[2])*1024
-        elif ts[3]=="MB":
-            torrent['size']=float(ts[2])/1024
-        elif ts[3]=="Unknown":
-            torrent['size']=1.0
-        else:
-            log("torrent size unit is neither GB nor TB not MB?\n%s"%(ts),l=2)
-            torrent['size']=1.0
+            torrent['seed_time']=re.search("Seeding Time.+?([0-9]+) seconds",detailed_info)
+            if torrent['seed_time']:
+                torrent['seed_time']=int(torrent['seed_time'].group(1))/86400 # in day
+            else:
+                torrent['seed_time']=1.0
+
+            torrent['ratio']=float(re.search("Ratio: ([0-9\\.]+)",detailed_info).group(1))
+            torrent['size']=_calc_size(re.search("Total size:.+?\\((.+?)wanted\\)",detailed_info).group(1))
+            torrent['size']=max(torrent['size'],1.0)
+        except Exception:
+            log("parse transmission_ls failed:\n%s"%(detailed_info),l=3)
+            continue
         text_s.append(torrent)
     return text_s
 
@@ -234,7 +230,11 @@ class TorrentBot(ContextDecorator):
     def __init__(self):
         super(TorrentBot, self).__init__()
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
-        self.existed_torrent=[]
+        if os.path.exists(torrent_id_save_path):
+            with open(torrent_id_save_path,'rb') as f:
+                self.existed_torrent=pickle.load(f)
+        else:
+            self.existed_torrent=[]
         self.refresh()
 
     def refresh(self):
@@ -245,14 +245,17 @@ class TorrentBot(ContextDecorator):
 
     def remove(self,target_size,neo_value):
         exist_seeds=[]
-        for i in parse_transmission_ls(execCmd(transmission_cmd+'-l')):
+        for i in transmission_ls():
             if i['id'][-1]=="*": # 未完成的后面有星号
                 continue
             if i['seed_time']<7: # 两周之内的
                 continue
             i['value']=i['ratio']/i['seed_time']
             exist_seeds.append(i)
-        exist_seeds.sort(key=lambda x: int(x['value']))
+        if len(exist_seeds)==0:
+            return False
+        exist_seeds.sort(key=lambda x: x['seed_time'],reverse=True)
+        exist_seeds.sort(key=lambda x: x['value'])
         value_avg=[i['value'] for i in exist_seeds]
         value_avg=sum(value_avg)/len(value_avg)
         log("average seed value: %.2f"%(value_avg))
@@ -288,7 +291,7 @@ class TorrentBot(ContextDecorator):
                     break
             except Exception:
                 log('下载种子文件失败',l=3)
-                self.__init__()
+                self.refresh()
         else:
             log('下载种子文件失败')
             return False
@@ -310,7 +313,7 @@ class TorrentBot(ContextDecorator):
         else:
             log("添加种子文件至 Transmisson 失败！",l=2)
             os.remove(torrent_file_path)
-            return True # 这个True是不要再继续下之后的种子的意思
+            return True # 这个 True 是不要再继续下之后的种子的意思
 
     def download_many(self,torrent_infos):
         free_wt=1.0 #越大越关注上传比，越小越关注上传量
@@ -348,18 +351,17 @@ class TorrentBot(ContextDecorator):
         if len(ok_infos)==0:
             return
 
-        exist_seeds=parse_transmission_ls(execCmd(transmission_cmd+'-l'))
+        exist_seeds=transmission_ls()
         torrent_size=sum([i['size'] for i in exist_seeds])
         for ii,i in enumerate(ok_infos):
             s_temp='%d: %s %sGB value=%.2f(during%.1fdays) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title'])
             log('将要下载： %s'%(s_temp))
-            torrent_size+=i['file_size']
-            if torrent_size>max_torrent_size:
-                log("磁盘空间已满(%.1fGB)，将执行自动清理"%(torrent_size))
-                if not self.remove(i['file_size'],i['value']):
+            if torrent_size+i['file_size']>max_torrent_size:
+                log("磁盘空间不足(%.1fGB)，将执行自动清理"%(torrent_size))
+                if not self.remove(torrent_size+i['file_size']-max_torrent_size,i['value']):
                     log("清理磁盘失败，跳过此种子")
-                    torrent_size-=i['file_size']
                     continue
+            torrent_size+=i['file_size']
             if self.download_one(i['seed_id']):
                 break # 每次只下一个种子，不要贪心
 
@@ -375,50 +377,44 @@ class TorrentBot(ContextDecorator):
             return parse_torrent_info(torrent_table)
         except Exception:
             log("获取失败： %s"%(url),l=2)
-            self.__init__()
+            self.refresh()
             return []
 
     def start(self):
-        while True:
-            tik=time.time()
-            log("正在扫描种子")
-            torrent_infos=self.scan_one_page(0)
-            for i in range(1,check_page):
-                time.sleep(2)
-                torrent_infos+=self.scan_one_page(i)
-            log("浏览了 %d 页，获得了 %d 组种子信息"%(check_page,len(torrent_infos)))
-            self.download_many(torrent_infos)
-            tok=time.time()
-            time.sleep(max(0,sleep_time*60-(tok-tik)))
+        log("正在扫描种子")
+        torrent_infos=self.scan_one_page(0)
+        for i in range(1,check_page):
+            time.sleep(2)
+            torrent_infos+=self.scan_one_page(i)
+        log("浏览了 %d 页，获得了 %d 组种子信息"%(check_page,len(torrent_infos)))
+        self.download_many(torrent_infos)
+        with open(torrent_id_save_path,'wb') as f:
+            self.existed_torrent=pickle.dump(self.existed_torrent[-50:],f)
+
 
 HELP_TEXT="""
     byrbt bot:
-        a bot that handles basic usage of bt.byr.cn
+        挑选北邮人上最受欢迎、最被需要的种子做种
     usage:
-        main - run main program
-        refresh - refresh cookies
-        help - print this message
-        exit
+        --main    run main program
+        --help    print this message
 """
 
 if __name__ == '__main__':
-    log(HELP_TEXT)
-    byrbt_bot=TorrentBot()
-    #byrbt_bot.download_one(312042) # 测试中文
-    #byrbt_bot.download_one(311970) # 测试英文
-    while True:
-        action_str = input("$ ")
-        if action_str == 'refresh':
-            log('refresh cookie by login!')
-            byrbt_bot.refresh()
-        elif action_str == 'exit':
-            break
-        elif action_str == 'help':
-            log(HELP_TEXT)
-        elif action_str == 'main':
-            byrbt_bot.start()
-        elif action_str == 'remove':
-            byrbt_bot.remove(max_torrent_size*0.2,-100.0)
-        else:
-            log('invalid operation')
-            log(HELP_TEXT)
+    if len(sys.argv)<2:
+        log(HELP_TEXT,l=0)
+        action_str=input("$ ")
+    else:
+        action_str=sys.argv[1]
+
+    if action_str.endswith('help'):
+        log(HELP_TEXT)
+    elif action_str.endswith('main'):
+        byrbt_bot=TorrentBot()
+        byrbt_bot.start()
+    elif action_str.endswith('remove'):
+        byrbt_bot=TorrentBot()
+        byrbt_bot.remove(max_torrent_size*0.2,-100.0)
+    else:
+        log('invalid argument')
+        log(HELP_TEXT,l=0)
