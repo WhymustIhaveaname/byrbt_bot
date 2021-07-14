@@ -8,7 +8,6 @@
 - [x] 重写 spaghetti codes、解决代码复用低的问题、lipssmycode 不会用一行 list 的语法导致程序变长和可读性降低
 - [x] 删除文件的问题：只会删除 linux_download_path 下并且所有 tracker 都是北邮人的文件
 - [x] 改为限制总大小而不是文件数
-- [x] 把交互改好看一些
 - [x] 降低请求失败重试次数至3或者2，失败两三次就得了，默认是 5 太烦人了
 - [x] 清除无用命令，那些可以用网页控制台的命令有必要再写一遍吗？而且好多代码竟然不是复用的！
 - [x] 重命名部分函数，原来所有函数都是 get 开头，改成更具有意义的 select、parse 等
@@ -32,7 +31,7 @@
 - [x] 支持识别验证码登录（感谢 [bumzy/decaptcha](https://github.com/bumzy/decaptcha) 项目）
 - [x] 支持下载种子(感谢 [Jason2031/byrbt_bot](https://github.com/Jason2031/byrbt_bot) 项目)
 - [x] 支持自动寻找合适的种子：下载最能提高做种率的（最受大家欢迎且做种人数不那么多的）种子
-- [x] 支持自动删除旧种子，下载新种子：使用 UCB 算法 决定何时换新种子
+- [x] 支持自动删除旧种子，下载新种子：使用 UCB 算法决定何时换新种子
 - [x] 支持使用 Transmission Web 管理种子
 
 <table>
@@ -87,7 +86,7 @@
     ```
 
     意思是整除 6 的小时的第 25 分钟执行。
-    更多关于 crontab 的信息见 [使用crontab重复执行脚本](https://github.com/WhymustIhaveaname/TsinghuaTunet#%E4%BD%BF%E7%94%A8crontab%E9%87%8D%E5%A4%8D%E6%89%A7%E8%A1%8C%E8%84%9A%E6%9C%AC)。
+    更多信息见 [使用crontab重复执行脚本](https://github.com/WhymustIhaveaname/TsinghuaTunet#%E4%BD%BF%E7%94%A8crontab%E9%87%8D%E5%A4%8D%E6%89%A7%E8%A1%8C%E8%84%9A%E6%9C%AC)。
 
 ### Acknowledgements
 
