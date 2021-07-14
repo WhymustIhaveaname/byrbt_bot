@@ -62,14 +62,14 @@
 
    复制 config-example.py 至 config.py，并更改以下信息。**注意 download_path 不要填自己正在用的文件夹，里面的文件可能会被删除！**
 
-```python
-username = '用户名'
-passwd = '密码'
-transmission_user_pw = 'user:passwd'  # transmission 的用户名和密码，按照格式填入
-linux_download_path = '<path_to_download_dir>'  # 下载路径
-max_torrent_size = 512  # 最大文件大小，GB
-check_page = 5   # 检查种子页前多少页
-```
+    ```python
+    username = '用户名'
+    passwd = '密码'
+    transmission_user_pw = 'user:passwd'  # transmission 的用户名和密码，按照格式填入
+    linux_download_path = '<path_to_download_dir>'  # 下载路径
+    max_torrent_size = 512  # 最大文件大小，GB
+    check_page = 5   # 检查种子页前多少页
+    ```
 
 * 启动！
 
@@ -80,15 +80,14 @@ check_page = 5   # 检查种子页前多少页
 
 * 使用 crontab 重复执行脚本
 
-    [使用crontab重复执行脚本](https://github.com/WhymustIhaveaname/TsinghuaTunet#%E4%BD%BF%E7%94%A8crontab%E9%87%8D%E5%A4%8D%E6%89%A7%E8%A1%8C%E8%84%9A%E6%9C%AC)
+    我的 crontab 是
 
-我的对应的 crontab 是
+    ```
+    25 */6 * * * cd /home/dAlembert/byrbt_bot && ./byrbt.py --main
+    ```
 
-```
-25 */6 * * * cd /home/dAlembert/byrbt_bot && ./byrbt.py --main
-```
-
-意思是整除 6 的小时的第 25 分钟执行。
+    意思是整除 6 的小时的第 25 分钟执行。
+    更多关于 crontab 的信息见 [使用crontab重复执行脚本](https://github.com/WhymustIhaveaname/TsinghuaTunet#%E4%BD%BF%E7%94%A8crontab%E9%87%8D%E5%A4%8D%E6%89%A7%E8%A1%8C%E8%84%9A%E6%9C%AC)。
 
 ### Acknowledgements
 
