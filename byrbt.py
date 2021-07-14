@@ -279,20 +279,18 @@ class TorrentBot(ContextDecorator):
 
     def download_one(self, torrent_id):
         download_url = get_url('download.php?id=%s'%(torrent_id))
-        torrent_file_name = None
         for i in range(2):
             try:
-                torrent = requests.get(download_url, cookies=self.cookie_jar, headers=self.headers)
-                torrent_file_name = torrent.headers['Content-Disposition']\
-                                        .split(';')[1].strip().split('=')[-1][1:-1]\
-                                        .encode('ascii','ignore').decode('ascii')\
-                                        .replace(' ', '#')
+                torrent = requests.get(download_url,cookies=self.cookie_jar,headers=self.headers)
+                torrent_file_name = re.search('filename="\\[BYRBT\\](.+?)"',torrent.headers['content-disposition'].encode('iso8859-1').decode('utf-8'))
                 if torrent_file_name is not None:
+                    torrent_file_name="[BYRBT-%s]%s"%(torrent_id,torrent_file_name.group(1))
                     break
             except Exception:
-                log('登陆失败',l=2)
+                log('下载种子文件失败',l=3)
                 self.__init__()
         else:
+            log('下载种子文件失败')
             return False
 
         torrent_file_path = os.path.join(download_path,torrent_file_name)
@@ -301,13 +299,13 @@ class TorrentBot(ContextDecorator):
             self.existed_torrent.append(torrent_id)
             return False
 
-        log("正在下载种子文件 %s"%(torrent_file_name,))
         with open(torrent_file_path, 'wb') as f:
             f.write(torrent.content)
         cmd_str = transmission_cmd+'-a "%s" -w %s'%(torrent_file_path,download_path)
         ret_val = os.system(cmd_str)
         if ret_val == 0:
             self.existed_torrent.append(torrent_id)
+            log("添加种子文件至 Transmisson 成功")
             return True
         else:
             log("添加种子文件至 Transmisson 失败！",l=2)
@@ -406,6 +404,8 @@ HELP_TEXT="""
 if __name__ == '__main__':
     log(HELP_TEXT)
     byrbt_bot=TorrentBot()
+    #byrbt_bot.download_one(312042) # 测试中文
+    #byrbt_bot.download_one(311970) # 测试英文
     while True:
         action_str = input("$ ")
         if action_str == 'refresh':
