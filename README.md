@@ -1,5 +1,7 @@
 # brybt_bot
 
+**代码已移至 [WhymustIhaveaname/ByrBtAutoDownloader](https://github.com/WhymustIhaveaname/ByrBtAutoDownloader)。**
+
 **上一个作者 [lipssmycode](https://github.com/lipssmycode) 不强调这个机器人会删除文件，一上来连警告都没有就把我1个T的文件给删了！！！
 而且原来仓库代码质量低、README 英文和汉字之间没空格、issue 没人理，我决定放弃原来的仓库，慢慢重写全部代码。**
 
@@ -25,5 +27,3 @@
 她隐藏 fork 痕迹，淡化原仓库的贡献，甚至最后的鸣谢都没有带原作者 Jason2031 的名字。
 还把协议 从 GPL 换成了 MIT，这都是非常不道德的。
 最让我生气的还是她的代码质量太低了，读她的代码就像手榴弹在大脑中爆炸一样上头。**
-
-代码移至 [WhymustIhaveaname/ByrBtAutoDownloader](https://github.com/WhymustIhaveaname/ByrBtAutoDownloader)。
