@@ -297,7 +297,7 @@ class TorrentBot(ContextDecorator):
 
         torrent_file_path = os.path.join(download_path,torrent_file_name)
         if os.path.exists(torrent_file_path):
-            log("种子文件已存在于 %s"%(torrent_file_path))
+            log("种子文件已存在")
             self.existed_torrent.append(torrent_id)
             return False
 
@@ -312,10 +312,10 @@ class TorrentBot(ContextDecorator):
         else:
             log("添加种子文件至 Transmisson 失败！",l=2)
             os.remove(torrent_file_path)
-            return False
+            return True # 这个True是不要再继续下之后的种子的意思
 
     def download_many(self,torrent_infos):
-        free_wt=2.0 #越大越关注上传比，越小越关注上传量
+        free_wt=1.0 #越大越关注上传比，越小越关注上传量
         ok_infos=[] #将要下载的种子
         for i in torrent_infos:
             if i['seed_id'] in self.existed_torrent:
@@ -329,11 +329,11 @@ class TorrentBot(ContextDecorator):
             if 'twoup' in i['tag']:
                 i['value']*=2
             if 'free' in i['tag']:
-                i['value']*=free_wt
+                i['value']*=(1+free_wt)
             elif 'halfdown' in i['tag']:
-                i['value']*=0.5*free_wt
+                i['value']*=(1+0.5*free_wt)
             elif 'thirtypercentdown' in i['tag']:
-                i['value']*=0.7*free_wt
+                i['value']*=(1+0.7*free_wt)
 
             # 我不想下太大的文件
             if i['file_size']>50:
@@ -352,9 +352,8 @@ class TorrentBot(ContextDecorator):
 
         exist_seeds=parse_transmission_ls(execCmd(transmission_cmd+'-l'))
         torrent_size=sum([i['size'] for i in exist_seeds])
-        ct=0
         for ii,i in enumerate(ok_infos):
-            s_temp='%d: %s %sGB value %.2f(existed %.2f days) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title'])
+            s_temp='%d: %s %sGB value=%.2f(during%.1fdays) %s'%(ii,i['seed_id'],i['file_size'],i['value'],i['live_time'],i['title'])
             log('将要下载： %s'%(s_temp))
             torrent_size+=i['file_size']
             if torrent_size>max_torrent_size:
@@ -364,29 +363,32 @@ class TorrentBot(ContextDecorator):
                     torrent_size-=i['file_size']
                     continue
             if self.download_one(i['seed_id']):
-                ct+=1
-            if ct>=2:
-                break
+                break # 每次只下一个种子，不要贪心
 
     def scan_one_page(self,page):
-        url="https://bt.byr.cn/torrents.php?inclbookmarked=0&pktype=0&incldead=0&spstate=0&page=%d"%(page)
+        if page==0:
+            url="https://bt.byr.cn/torrents.php"
+        else:
+            url="https://bt.byr.cn/torrents.php?inclbookmarked=0&pktype=0&incldead=0&spstate=0&page=%d"%(page)
         try:
-            log('正在扫描：%s'%(url))
             getemp=requests.get(url,cookies=self.cookie_jar,headers=self.headers).content
             torrents_soup = BeautifulSoup(getemp,features='lxml')
             torrent_table = torrents_soup.select('.torrents > form > tr')[1:] #<table class="torrents" blabla>
             return parse_torrent_info(torrent_table)
         except Exception:
+            log("获取失败： %s"%(url),l=2)
             self.__init__()
             return []
 
     def start(self):
         while True:
             tik=time.time()
-            torrent_infos=[]
-            for i in range(check_page):
-                time.sleep(i)
+            log("正在扫描种子")
+            torrent_infos=self.scan_one_page(0)
+            for i in range(1,check_page):
+                time.sleep(2)
                 torrent_infos+=self.scan_one_page(i)
+            log("浏览了 %d 页，获得了 %d 组种子信息"%(check_page,len(torrent_infos)))
             self.download_many(torrent_infos)
             tok=time.time()
             time.sleep(max(0,sleep_time*60-(tok-tik)))

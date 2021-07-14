@@ -33,6 +33,17 @@
 - [x] 支持自动删除旧种子，下载新种子：使用 UCB 算法 决定何时换新种子
 - [x] 支持使用 Transmission Web 管理种子
 
+<table>
+    <tr>
+        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/figures/terminal.png"/></th>
+        <th><img src="https://raw.githubusercontent.com/WhymustIhaveaname/byrbt_bot/main/figures/web.png"/></th>
+    </tr>
+    <tr>
+        <th>命令行输出</th>
+        <th>Transmission Web 管理界面</th>
+    </tr>
+</table>
+
 ### Usage
 
 * 安装相应依赖包
